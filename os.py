@@ -28,54 +28,65 @@ GPIO.output(in3, GPIO.LOW)
 GPIO.output(in4, GPIO.LOW)
 
 endTime=datetime.datetime.now()+datetime.timedelta(minutes=5)
+
+aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+parameters = cv2.aruco.DetectorParameters_create()
+
+# Get the frame dimensions
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
 while True:
+    # Capture a frame from the camera
     ret, frame = cap.read()
-    low_b = np.uint8([5,5,5])
-    high_b = np.uint8([0,0,0])
-    mask = cv2.inRange(frame, high_b, low_b)
-    contours, hierarchy = cv2.findContours(mask, 1, cv2.CHAIN_APPROX_NONE)
-    if len(contours) > 0 :
-        c = max(contours, key=cv2.contourArea)
-        M = cv2.moments(c)
-        if M["m00"] !=0 :
-            cx = int(M['m10']/M['m00'])
-            cy = int(M['m01']/M['m00'])
-            print("CX : "+str(cx)+"  CY : "+str(cy))
-            if cx >= 120 :
-                print("Turn Left")
-                GPIO.output(in1, GPIO.HIGH)
-                GPIO.output(in2, GPIO.LOW)
-                GPIO.output(in3, GPIO.LOW)
-                GPIO.output(in4, GPIO.HIGH)
-            if cx < 120 and cx > 40 :
-                print("On Track!")
-                GPIO.output(in1, GPIO.HIGH)
-                GPIO.output(in2, GPIO.LOW)
-                GPIO.output(in3, GPIO.HIGH)
-                GPIO.output(in4, GPIO.LOW)
-            if cx <=40 :
-                print("Turn Right")
-                GPIO.output(in1, GPIO.LOW)
-                GPIO.output(in2, GPIO.HIGH)
-                GPIO.output(in3, GPIO.HIGH)
-                GPIO.output(in4, GPIO.LOW)
-            cv2.circle(frame, (cx,cy), 5, (255,255,255), -1)
-    else :
+
+    # Detect the ArUco code in the frame
+    corners, ids, _ = cv2.aruco.detectMarkers(frame, aruco_dict, parameters=parameters)
+
+    # If at least one code is detected, print its position
+    if len(corners) > 0:
+        # Get the center of the code
+        center = np.mean(corners[0][0], axis=0)
+
+        # Determine if the code is on the left or right of the screen
+        if center[0] < (width/2)-100:
+            print('Code is on the LEFT')
+            GPIO.output(in1, GPIO.HIGH)
+            GPIO.output(in2, GPIO.LOW)
+            GPIO.output(in3, GPIO.LOW)
+            GPIO.output(in4, GPIO.HIGH)
+        elif center[0]>(width/2)+100:
+            print('Code is on the RIGHT')
+            print("Turn Right")
+            GPIO.output(in1, GPIO.LOW)
+            GPIO.output(in2, GPIO.HIGH)
+            GPIO.output(in3, GPIO.HIGH)
+            GPIO.output(in4, GPIO.LOW)
+        else:
+            print("The code is straight")
+            GPIO.output(in1, GPIO.HIGH)
+            GPIO.output(in2, GPIO.LOW)
+            GPIO.output(in3, GPIO.HIGH)
+            GPIO.output(in4, GPIO.LOW)
+    
+    else:
         GPIO.output(in1, GPIO.LOW)
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.LOW)
-    cv2.drawContours(frame, c, -1, (0,255,0), 1)
-    cv2.imshow("Mask",mask)
-    cv2.imshow("Frame",frame)
-    if cv2.waitKey(1) & 0xff == ord('q') or datetime.datetime.now()>=endTime:
+
+    # Display the frame with the code overlay
+    cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+    cv2.imshow('Frame', frame)
+
+    # Check for key press to exit
+    if cv2.waitKey(1) & 0xFF == ord('q') or datetime.datetime.now()>=endTime:
         GPIO.output(in1, GPIO.LOW)
         GPIO.output(in2, GPIO.LOW)
         GPIO.output(in3, GPIO.LOW)
         GPIO.output(in4, GPIO.LOW)
         break
 
-GPIO.cleanup()
+# Release the camera and close all windows
 cap.release()
 cv2.destroyAllWindows()
-
